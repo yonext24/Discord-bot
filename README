@@ -1,0 +1,3 @@
+  Bot de discord que extrae las noticias de hltv (una página de noticias de CSGO) y las
+publica en mi servidor. También limpia mensajes y puede shadowbanear usuarios (todas las vocales de los
+mensajes que publiquen se reemplazarán por una i)
