@@ -12,20 +12,17 @@ import time
 
 client = discord.Client()
 my_secret = os.environ['PRIVATE_TOKEN']
+my_channel_id = 'your id here'
 
 async def extract_news():
-    channel_id = 'my channel id'
     print('Extracting Hltv News . . . ')
-    channel = client.get_channel(channel_id)
+    channel = client.get_channel(my_channel_id)
     validTeams = ['9z', 'Isurus', 'Leviatan']
     rawPageContent = requests.get('https://www.hltv.org').content
     parsedPageContent = BeautifulSoup(rawPageContent, 'html.parser')
-    # Extracting News
+# Extracting News
     for i, tag in enumerate(parsedPageContent.find_all('a', attrs={'class': 'newsline article'})):
-        if tag.contents[2].text in db['news']: continue
-
         if '9z' in tag.contents[2].text or tag.contents[0]['alt'] == 'Argentina' or tag.contents[0]['alt'] == 'Brazil':
-            db['news'].append(tag.contents[2].text)
             if tag.contents[0]['alt'] == 'Argentina':
                 flag = ':flag_ar: '
                 highlight = '**'
@@ -37,10 +34,11 @@ async def extract_news():
             link = 'https://www.hltv.org' + href
             newtext += highlight + flag + tag.contents[2].text + highlight + '\n\n'
 
-            # ----------------------------- GETTING NOTICE DETAILS ------------------------------------
+# ----------------------------- GETTING NOTICE DETAILS ------------------------------------
             time.sleep(2)
             rawPageNoticeContent = requests.get(link).content
             parsedPageNoticeContent = BeautifulSoup(rawPageNoticeContent, 'html.parser')
+            print('---------------------------------------\n--------------------------------------\n-----------------------------')
             print(newtext)
             header = parsedPageNoticeContent.find('p', attrs={'class': 'headertext'}).text
             paragraph = parsedPageNoticeContent.find('p', attrs={'class': 'news-block'}).text
@@ -52,26 +50,83 @@ async def extract_news():
             print(newtext, len(newtext))
             await channel.send(newtext)
 
-    # Extracting Matches
+# Extracting Matches
     for tag in parsedPageContent.find_all('a', attrs={'class': 'hotmatch-box'}):
-        if tag['href'] in db['matches']: continue
+        print(tag['href'])
         teamrowsDiv = tag.find('div', attrs={'class': 'teamrows'})
-        if not (teamrowsDiv.contents[1].text.strip() in validTeams or teamrowsDiv.contents[
-            3].text.strip() in validTeams):
+        if not (teamrowsDiv.contents[1].text.strip() in validTeams or teamrowsDiv.contents[3].text.strip() in validTeams):
             continue
-        db['matches'].append(tag['href'])
         rawTime = tag.find('div', attrs={'class': 'middleExtra'}).text
         matchTime = int(rawTime[0:2]) - 4
-        matchTime = str(matchTime) + rawTime[2:100]
+        matchTime = str(time) + rawTime[2:100]
         team1 = teamrowsDiv.contents[1].text.strip()
         team2 = teamrowsDiv.contents[3].text.strip()
-        finalString = f'-------------------------------------------- \n ***{team1} vs {team2} hoy a las {str(matchTime)}*** *(aprox)* <@288351675054424074> \n --------------------------------------------'
+        finalString = f'-------------------------------------------- \n **{team1} vs {team2} hoy a las {str(time)} (aprox)** \n --------------------------------------------'
         await channel.send(finalString)
+
+async def extract_matches():
+    channel = client.get_channel(my_channel_id)
+    validTeams = ['9z', 'Isurus', 'Leviatan']
+    raw_page_content = requests.get('https://hltv.org/matches').content
+    parsed_page_content = BeautifulSoup(raw_page_content, 'html.parser')
+    upcoming_matches = parsed_page_content.find('div', attrs={'class': 'upcomingMatchesSection'})
+    for match in upcoming_matches.find_all('div', attrs={'class': 'upcomingMatch'}):
+        print(match.a['href'])
+        if match.find('div', attrs={'class': 'matchEmpty'}) is not None: continue
+        participants = match.find_all('div', attrs={'class': 'matchTeamName'})
+        if not (participants[0].text.strip() in validTeams or participants[1].text.strip() in validTeams): continue
+        team1 = participants[0].text.strip()
+        team2 = participants[1].text.strip()
+        raw_match_time = match.find('div', attrs={'class': 'matchTime'}).text
+        match_time = int(raw_match_time[0:2]) - 4
+        match_time = str(match_time) + raw_match_time[2:100]
+        match_map = match.find('div', attrs={'class': 'matchMeta'}).text.strip().upper()
+        match_event = match.find('div', attrs={'class': 'matchEvent'})
+        message = f'|  {team1.upper()} vs {team2.upper()}  |\n'
+        hour = f'_a las {match_time}hs_'
+        if match_event is not None: match_message = match_event.text.strip().upper() + '\n'
+        else: match_message = ''
+        if len(message) > len(hour) - 2:
+            title = match_map.center(int(len(message) - 1)).replace(' ', '-') + '\n'
+            dashes = ''.join('-' for i in range(len(message))) + '\n'
+            hour = hour.center(int(len(message)))
+        else:
+            title = 'MATCH'.center(int(len(hour) - 3)).replace(' ', '-') + '\n'
+            dashes = ''.join('-' for i in range(len(hour) - 2)) + '\n'
+            hour = hour.center(int(len(hour)))
+        match_message += title + message + dashes  + hour
+        match_message = '' + match_message + ''
+        print(match_message)
+        await channel.send(match_message)
+
+async def extract_results():
+    channel = client.get_channel(my_channel_id)
+    valid_teams = ['9z', 'Leviatan', 'Isurus']
+    raw_page_content = requests.get('https://www.hltv.org/results').content
+    parsed_page_content = BeautifulSoup(raw_page_content, 'html.parser')
+    for result in parsed_page_content.find_all('div', attrs={'class': 'result'}):
+        teams = result.find_all('div', attrs={'class': 'team'})
+        if not (teams[0].text.strip() in valid_teams or teams[1].text.strip() in valid_teams): continue
+        teams = result.find_all('div', class_='team')
+        if 'team-won' in teams[0]['class']:
+            team_won = teams[0].text.strip()
+            team_lost = teams[1].text.strip()
+        else:
+            team_won = teams[1].text.strip()
+            team_lost = teams[0].text.strip()
+        score_won = result.find('span', class_='score-won').text
+        score_lost = result.find('span', class_='score-lost').text
+        main_message = '     ||' + team_won + ' ' + ' ' + score_won + ' - ' + score_lost + ' ' + team_lost + '||   \n'
+        title = 'RESULT'.center(len(main_message) - 1).replace(' ', '-') + '\n'
+        dashes = ''.join('-' for _ in range(len(title) + 1))
+        await channel.send(title + '\n' + main_message + '\n' + dashes)
 
 
 @tasks.loop(minutes=30)
 async def sender():
     await extract_news()
+    await extract_matches()
+    await extract_results()
 
 
 @client.event
